@@ -57,7 +57,8 @@ if ( ! class_exists( 'WP_REST_Menus' ) ) :
 				array(
 					'methods'  => WP_REST_Server::READABLE,
 					'callback' => array( $this, 'get_menus' ),
-				)
+					'args'     => $this->get_menus_collection_params(),
+				),
 			) );
 
 			register_rest_route( self::get_plugin_namespace(), '/menus/(?P<id>\d+)', array(
@@ -88,40 +89,61 @@ if ( ! class_exists( 'WP_REST_Menus' ) ) :
 
 		}
 
-
 		/**
 		 * Get menus.
 		 *
+		 * @param WP_REST_Request $request Request.
 		 * @since  1.2.0
 		 * @return array All registered menus
 		 */
-		public static function get_menus() {
+		public function get_menus( WP_REST_Request $request ) {
 
 			$rest_url = trailingslashit( get_rest_url() . self::get_plugin_namespace() . '/menus/' );
-			$wp_menus = wp_get_nav_menus();
 
-			$i = 0;
+			$args = array();
+			if ( ! empty( $request['slug'] ) ) {
+				$args['slug'] = $request['slug'];
+			} elseif ( ! empty( $request['filter']['name'] ) ) {
+				$args['slug'] = $request['filter']['name'];
+			}
+			$wp_menus = wp_get_nav_menus( $args );
+
 			$rest_menus = array();
-			foreach ( $wp_menus as $wp_menu ) :
+			foreach ( $wp_menus as $wp_menu ) {
+				$menu = array_merge(
+					array(
+						'id' => $wp_menu->term_id,
+						'ID' => $wp_menu->term_id, // Deprecated.
+					),
+					(array) $wp_menu
+				);
 
-				$menu = (array) $wp_menu;
+				$menu['meta']['links']['collection'] = $rest_url;
+				$menu['meta']['links']['self']       = $rest_url . $menu['term_id'];
 
-				$rest_menus[ $i ]                = $menu;
-				$rest_menus[ $i ]['ID']          = $menu['term_id'];
-				$rest_menus[ $i ]['name']        = $menu['name'];
-				$rest_menus[ $i ]['slug']        = $menu['slug'];
-				$rest_menus[ $i ]['description'] = $menu['description'];
-				$rest_menus[ $i ]['count']       = $menu['count'];
-
-				$rest_menus[ $i ]['meta']['links']['collection'] = $rest_url;
-				$rest_menus[ $i ]['meta']['links']['self']       = $rest_url . $menu['term_id'];
-
-				$i ++;
-			endforeach;
+				$rest_menus[] = $menu;
+			}
 
 			return apply_filters( 'rest_menus_format_menus', $rest_menus );
 		}
 
+		/**
+		 * Get collection params for menus endpoint.
+		 *
+		 * @return array
+		 */
+		public function get_menus_collection_params() {
+			$params = array();
+			$params['slug'] = array(
+				'description'       => __( 'Limit result set to posts with a specific slug.' ),
+				'type'              => 'string',
+				'validate_callback' => 'rest_validate_request_arg',
+			);
+			$params['filter'] = array(
+				'description' => __( 'Supplying name is synonymous with supplying slug.' ),
+			);
+			return $params;
+		}
 
 		/**
 		 * Get a menu.
@@ -152,10 +174,8 @@ if ( ! class_exists( 'WP_REST_Menus' ) ) :
 				foreach ( $wp_menu_items as $item_object ) {
 					$rest_menu_items[] = $this->format_menu_item( $item_object );
 				}
+				$rest_menu['items'] = $this->nested_menu_items( $rest_menu_items, 0 );
 
-				$rest_menu_items = $this->nested_menu_items($rest_menu_items, 0);
-
-				$rest_menu['items']                       = $rest_menu_items;
 				$rest_menu['meta']['links']['collection'] = $rest_url;
 				$rest_menu['meta']['links']['self']       = $rest_url . $id;
 
