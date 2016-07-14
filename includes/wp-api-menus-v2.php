@@ -118,6 +118,14 @@ if ( ! class_exists( 'WP_REST_Menus' ) ) :
 					(array) $wp_menu
 				);
 
+				// Add items.
+				$wp_menu_items = wp_get_nav_menu_items( $wp_menu->term_id );
+				$rest_menu_items = array();
+				foreach ( $wp_menu_items as $item_object ) {
+					$rest_menu_items[] = $this->format_menu_item( $item_object );
+				}
+				$menu['items'] = $this->nested_menu_items( $rest_menu_items, 0 );
+
 				$menu['meta']['links']['collection'] = $rest_url;
 				$menu['meta']['links']['self']       = $rest_url . $menu['term_id'];
 
